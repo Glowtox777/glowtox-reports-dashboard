@@ -2,22 +2,19 @@
 
 Lightweight internal dashboard for replacing the first Power BI appointment reports. The current UI uses mock data by default.
 
-## Secure Portainer Deployment With Cloudflare Tunnel
+## Portainer Deployment With Existing Cloudflare Tunnel
 
-This stack runs the dashboard and `cloudflared` together without publishing any host ports. The dashboard is reachable only inside the Docker network at `http://dashboard:4173`.
+This stack is intended for your existing Cloudflare Tunnel named `dash1`. It does not start a `cloudflared` container and does not publish any host ports.
 
-1. Create a Cloudflare Tunnel first.
-2. In Cloudflare Zero Trust, set the tunnel public hostname:
-   - `reports.glowtox.link` to service `http://dashboard:4173`
-   - or `reports.glowtox.de` to service `http://dashboard:4173`
-3. Copy the tunnel token.
-4. In Portainer, create a stack from this GitHub repository.
-5. Add `CLOUDFLARE_TUNNEL_TOKEN` in the Portainer stack environment variables. Do not commit the token to Git.
-6. Keep `USE_REAL_REPORT_DATA=false` for the first deployment.
-7. Deploy the stack using `docker-compose.yml`.
-8. Protect the hostname with Cloudflare Access before sharing it.
+1. Deploy the stack in Portainer from this GitHub repository.
+2. Keep `USE_REAL_REPORT_DATA=false` for the first deployment.
+3. After deploy, open the `glowtox-reports-dashboard` container in Portainer.
+4. Find the container's internal Docker IP address.
+5. In the existing Cloudflare Tunnel `dash1`, route `reports.glowtox.link` to `http://<container-ip>:4173`.
+6. No public host ports are required.
+7. Protect `reports.glowtox.link` with Cloudflare Access before sharing it.
 
-The production compose file uses `expose: 4173` for the dashboard and does not publish any host ports.
+The production compose file uses `expose: 4173` only and does not publish host ports.
 
 For optional local testing, use `docker-compose.local.yml`. It binds only to `127.0.0.1:4173`.
 

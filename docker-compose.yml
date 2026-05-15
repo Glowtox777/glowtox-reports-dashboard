@@ -1,23 +1,9 @@
 services:
   dashboard:
     build: .
+    container_name: glowtox-reports-dashboard
     expose:
       - "4173"
     environment:
       USE_REAL_REPORT_DATA: "false"
-    networks:
-      - dashboard_internal
     restart: unless-stopped
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      - dashboard
-    networks:
-      - dashboard_internal
-    restart: unless-stopped
-
-networks:
-  dashboard_internal:
-    driver: bridge
