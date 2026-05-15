@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interne Terminberichte</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Interne Reports</p>
+          <h1>Termin-Dashboard</h1>
+        </div>
+        <div class="heartbeat" id="globalHeartbeat"></div>
+      </header>
+
+      <nav class="tabs" aria-label="Berichte">
+        <button class="tab is-active" data-tab="bookings">Bericht 1: Buchungen</button>
+        <button class="tab" data-tab="planned">Bericht 2: Geplante Termine</button>
+        <button class="tab" data-tab="completed">Bericht 3: Stattgefundene Termine</button>
+      </nav>
+
+      <section class="report is-active" id="bookings" aria-labelledby="bookings-title">
+        <div class="reportHeader">
+          <div>
+            <h2 id="bookings-title">Buchungen</h2>
+            <p>Enthält keine Buchungen die nur aus 'Nachsorge' bestehen.</p>
+            <p class="metaLine" id="bookingsLatest"></p>
+          </div>
+          <div class="filters">
+            <label>
+              Von
+              <input type="date" id="bookingsStart" />
+            </label>
+            <label>
+              Bis
+              <input type="date" id="bookingsEnd" />
+            </label>
+            <label>
+              Wochentag
+              <select id="weekdayFilter">
+                <option value="all">Alle</option>
+                <option value="Monday">Montag</option>
+                <option value="Tuesday">Dienstag</option>
+                <option value="Wednesday">Mittwoch</option>
+                <option value="Thursday">Donnerstag</option>
+                <option value="Friday">Freitag</option>
+                <option value="Saturday">Samstag</option>
+                <option value="Sunday">Sonntag</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="bookingSections">
+          <section class="reportPanel">
+            <div class="panelTitle">
+              <h3>Erstellte Buchungen pro Tag</h3>
+              <span id="bookingsHeartbeat"></span>
+            </div>
+            <div class="reportGrid">
+              <div id="bookingChart"></div>
+              <div id="bookingTable"></div>
+            </div>
+          </section>
+          <section class="reportPanel">
+            <div class="panelTitle">
+              <h3>Abgesagte Buchungen</h3>
+              <span id="cancelledHeartbeat"></span>
+            </div>
+            <div class="reportGrid">
+              <div id="cancelledChart"></div>
+              <div id="cancelledTable"></div>
+            </div>
+          </section>
+          <section class="reportPanel">
+            <div class="panelTitle">
+              <h3>Alle Buchungen</h3>
+              <span id="allBookingsHeartbeat"></span>
+            </div>
+            <div class="reportGrid">
+              <div id="allBookingsChart"></div>
+              <div id="allBookingsTable"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="report" id="planned" aria-labelledby="planned-title">
+        <div class="reportHeader">
+          <div>
+            <h2 id="planned-title">Geplante Termine, nächste 30 Tage</h2>
+            <p>Enthält keine Buchungen die nur aus 'Nachsorge' bestehen.</p>
+            <p class="metaLine" id="plannedLatest"></p>
+          </div>
+          <div class="filters">
+            <label>
+              Von
+              <input type="date" id="plannedStart" />
+            </label>
+            <label>
+              Bis
+              <input type="date" id="plannedEnd" />
+            </label>
+          </div>
+        </div>
+        <div class="layoutTwo powerLayout">
+          <section class="reportPanel">
+            <div class="panelTitle">
+              <h3>Geplante Termine, nächste 30 Tage</h3>
+              <span>Ziel 51 / Referenz 64</span>
+            </div>
+            <div id="plannedChart"></div>
+          </section>
+          <section class="reportPanel tablePanel">
+            <div class="panelTitle">
+              <h3>Planwerte</h3>
+            </div>
+            <div id="plannedTable"></div>
+            <p class="panelFooter" id="plannedHeartbeat"></p>
+          </section>
+        </div>
+      </section>
+
+      <section class="report" id="completed" aria-labelledby="completed-title">
+        <div class="reportHeader">
+          <div>
+            <h2 id="completed-title">Stattgefundene Termine</h2>
+            <p>Enthält keine Buchungen die nur aus 'Nachkontrolle' bestehen.</p>
+            <p class="metaLine" id="completedLatest"></p>
+          </div>
+          <div class="filters">
+            <label>
+              Von
+              <input type="date" id="completedStart" />
+            </label>
+            <label>
+              Bis
+              <input type="date" id="completedEnd" />
+            </label>
+          </div>
+        </div>
+        <div class="layoutTwo powerLayout">
+          <section class="reportPanel">
+            <div class="panelTitle">
+              <h3>Stattgefundene Termine</h3>
+              <span>Ziel 51 / Referenz 64</span>
+            </div>
+            <div id="completedChart"></div>
+            <div class="belowChartFilter">
+              <label>
+                Monat
+                <select id="completedMonth"></select>
+              </label>
+            </div>
+          </section>
+          <section class="reportPanel tablePanel">
+            <div class="panelTitle">
+              <h3>Istwerte</h3>
+            </div>
+            <div id="completedTable"></div>
+            <p class="panelFooter" id="completedHeartbeat"></p>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
