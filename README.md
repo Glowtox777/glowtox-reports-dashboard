@@ -2,6 +2,17 @@
 
 Lightweight internal dashboard for replacing the first Power BI appointment reports. The current UI uses mock data by default.
 
+## Runtime
+
+The dashboard runs on a minimal Node/Express server. Express serves the static frontend and provides server-side API endpoints:
+
+- `GET /api/reports/summary`
+- `GET /api/diagnostics`
+
+`/api/reports/summary` returns mock report data while `USE_REAL_REPORT_DATA=false`. When `USE_REAL_REPORT_DATA=true`, it uses the read-only repository in `src/lib/reports/appointmentReadOnlyRepository.js` to run Cosmos SQL `SELECT` queries server-side.
+
+`/api/diagnostics` is read-only. It reports whether real data mode is enabled, whether the Cosmos endpoint is configured, the configured database/container ids, a count query result, and only safe fields from the latest three appointments. It must not return `COSMOS_KEY`, full documents, or any secret values.
+
 ## Portainer Deployment With Existing Cloudflare Tunnel
 
 This stack is intended for your existing Cloudflare Tunnel named `dash1`. It does not start a `cloudflared` container and does not publish any host ports.
@@ -33,7 +44,7 @@ USE_REAL_REPORT_DATA=false
 CLOUDFLARE_TUNNEL_TOKEN=
 ```
 
-To enable real read-only report data later, set `USE_REAL_REPORT_DATA=true` in the server-side runtime environment and provide the Cosmos DB values above. Do not expose these variables in browser-bundled code.
+To enable real read-only report data later, set `USE_REAL_REPORT_DATA=true` in the server-side runtime environment and provide the Cosmos DB values above. These values are used only by the Express server and must not be exposed in browser-bundled code.
 
 The repository functions are read-only and use Cosmos SQL `SELECT` queries only:
 

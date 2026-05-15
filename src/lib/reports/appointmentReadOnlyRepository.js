@@ -87,6 +87,45 @@ export async function getCompletedAppointmentsByDay({ from, to, month }) {
   });
 }
 
+export async function getAppointmentDiagnostics() {
+  const container = await getAppointmentsContainer();
+  const countQuery = {
+    query: "SELECT VALUE COUNT(1) FROM c",
+  };
+  const latestQuery = {
+    query: `
+      SELECT TOP 3
+        c.id,
+        c.created_at,
+        c.starts_at,
+        c.state,
+        c.isOnlyAftercare,
+        c.no_show,
+        c.customer_id
+      FROM c
+      ORDER BY c.created_at DESC
+    `,
+  };
+
+  const [countResult, latestResult] = await Promise.all([
+    container.items.query(countQuery, { enableCrossPartitionQuery: true }).fetchAll(),
+    container.items.query(latestQuery, { enableCrossPartitionQuery: true }).fetchAll(),
+  ]);
+
+  return {
+    appointmentCount: countResult.resources[0] ?? 0,
+    latestAppointments: latestResult.resources.map((appointment) => ({
+      id: appointment.id ?? null,
+      created_at: appointment.created_at ?? null,
+      starts_at: appointment.starts_at ?? null,
+      state: appointment.state ?? null,
+      isOnlyAftercare: appointment.isOnlyAftercare ?? null,
+      no_show: appointment.no_show ?? null,
+      customer_id: appointment.customer_id ?? null,
+    })),
+  };
+}
+
 async function queryAppointmentsByDay({
   dateField,
   from,

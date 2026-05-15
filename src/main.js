@@ -1,15 +1,8 @@
 import { renderDailyBarChart } from "./components/DailyBarChart.js";
 import { renderReportTable } from "./components/ReportTable.js";
-import {
-  getAvailableCompletedMonths,
-  getBookingsReport,
-  getCompletedReport,
-  getDefaultFilters,
-  getPlannedReport,
-} from "./lib/reports/reportService.js";
 import { REPORT_TARGETS } from "./lib/reports/reportTypes.js";
 
-const filters = getDefaultFilters();
+let filters = null;
 
 const elements = {
   globalHeartbeat: document.querySelector("#globalHeartbeat"),
@@ -25,19 +18,7 @@ const elements = {
   completedTable: document.querySelector("#completedTable"),
 };
 
-document.querySelector("#bookingsStart").value = filters.bookings.startDate;
-document.querySelector("#bookingsEnd").value = filters.bookings.endDate;
-document.querySelector("#weekdayFilter").value = filters.bookings.weekday;
-document.querySelector("#plannedStart").value = filters.planned.startDate;
-document.querySelector("#plannedEnd").value = filters.planned.endDate;
-document.querySelector("#completedStart").value = filters.completed.startDate;
-document.querySelector("#completedEnd").value = filters.completed.endDate;
-
 const monthSelect = document.querySelector("#completedMonth");
-monthSelect.innerHTML = getAvailableCompletedMonths()
-  .map((month) => `<option value="${month}">${month}</option>`)
-  .join("");
-monthSelect.value = filters.completed.month;
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -49,51 +30,75 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 bindFilter("#bookingsStart", (value) => {
+  if (!filters) return;
   filters.bookings.startDate = value;
-  renderBookings();
+  loadSummary();
 });
 bindFilter("#bookingsEnd", (value) => {
+  if (!filters) return;
   filters.bookings.endDate = value;
-  renderBookings();
+  loadSummary();
 });
 bindFilter("#weekdayFilter", (value) => {
+  if (!filters) return;
   filters.bookings.weekday = value;
-  renderBookings();
+  loadSummary();
 });
 bindFilter("#plannedStart", (value) => {
+  if (!filters) return;
   filters.planned.startDate = value;
-  renderPlanned();
+  loadSummary();
 });
 bindFilter("#plannedEnd", (value) => {
+  if (!filters) return;
   filters.planned.endDate = value;
-  renderPlanned();
+  loadSummary();
 });
 bindFilter("#completedMonth", (value) => {
+  if (!filters) return;
   filters.completed.month = value;
   filters.completed.startDate = `${value.slice(0, 4)}-${value.slice(4, 6)}-01`;
   document.querySelector("#completedStart").value = filters.completed.startDate;
-  renderCompleted();
+  loadSummary();
 });
 bindFilter("#completedStart", (value) => {
+  if (!filters) return;
   filters.completed.startDate = value;
-  renderCompleted();
+  loadSummary();
 });
 bindFilter("#completedEnd", (value) => {
+  if (!filters) return;
   filters.completed.endDate = value;
-  renderCompleted();
+  loadSummary();
 });
 
-renderAll();
+loadSummary();
 
-function renderAll() {
-  elements.globalHeartbeat.textContent = `Letzte Aktualisierung: ${new Date().toLocaleString("de-DE")}`;
-  renderBookings();
-  renderPlanned();
-  renderCompleted();
+async function loadSummary() {
+  try {
+    const response = await fetch(`/api/reports/summary${buildQueryString()}`);
+    if (!response.ok) {
+      throw new Error(`Report API failed with ${response.status}`);
+    }
+    const summary = await response.json();
+
+    filters = summary.filters;
+    syncFilterInputs(summary);
+    renderAll(summary);
+  } catch (error) {
+    elements.globalHeartbeat.textContent = "Berichtsdaten konnten nicht geladen werden.";
+    console.error(error);
+  }
 }
 
-function renderBookings() {
-  const report = getBookingsReport(filters.bookings);
+function renderAll(summary) {
+  elements.globalHeartbeat.textContent = `Letzte Aktualisierung: ${summary.generatedAt}`;
+  renderBookings(summary.reports.bookings);
+  renderPlanned(summary.reports.planned);
+  renderCompleted(summary.reports.completed);
+}
+
+function renderBookings(report) {
   const weekdayLabel = filters.bookings.weekday === "all" ? "alle Wochentage" : translateWeekday(filters.bookings.weekday);
   document.querySelector("#bookingsLatest").textContent =
     `Letztes Datendatum: ${report.latestDataDate} · Filter: ${weekdayLabel}`;
@@ -125,8 +130,7 @@ function renderBookings() {
   });
 }
 
-function renderPlanned() {
-  const report = getPlannedReport(filters.planned);
+function renderPlanned(report) {
   document.querySelector("#plannedHeartbeat").textContent = `Heartbeat: ${report.heartbeat}`;
   document.querySelector("#plannedLatest").textContent = `Letztes Datendatum: ${report.latestDataDate}`;
 
@@ -156,8 +160,7 @@ function renderPlanned() {
   );
 }
 
-function renderCompleted() {
-  const report = getCompletedReport(filters.completed);
+function renderCompleted(report) {
   document.querySelector("#completedHeartbeat").textContent = `Heartbeat: ${report.heartbeat}`;
   document.querySelector("#completedLatest").textContent = `Letztes Datendatum: ${report.latestDataDate}`;
 
@@ -205,6 +208,39 @@ function renderBookingSection({ chartTarget, tableTarget, heartbeatTarget, rows,
 
 function bindFilter(selector, callback) {
   document.querySelector(selector).addEventListener("change", (event) => callback(event.target.value));
+}
+
+function syncFilterInputs(summary) {
+  document.querySelector("#bookingsStart").value = filters.bookings.startDate;
+  document.querySelector("#bookingsEnd").value = filters.bookings.endDate;
+  document.querySelector("#weekdayFilter").value = filters.bookings.weekday;
+  document.querySelector("#plannedStart").value = filters.planned.startDate;
+  document.querySelector("#plannedEnd").value = filters.planned.endDate;
+  document.querySelector("#completedStart").value = filters.completed.startDate;
+  document.querySelector("#completedEnd").value = filters.completed.endDate;
+  monthSelect.innerHTML = summary.completedMonths
+    .map((month) => `<option value="${month}">${month}</option>`)
+    .join("");
+  monthSelect.value = filters.completed.month;
+}
+
+function buildQueryString() {
+  if (!filters) {
+    return "";
+  }
+
+  const params = new URLSearchParams({
+    bookingsStart: filters.bookings.startDate,
+    bookingsEnd: filters.bookings.endDate,
+    weekday: filters.bookings.weekday,
+    plannedStart: filters.planned.startDate,
+    plannedEnd: filters.planned.endDate,
+    completedMonth: filters.completed.month,
+    completedStart: filters.completed.startDate,
+    completedEnd: filters.completed.endDate,
+  });
+
+  return `?${params.toString()}`;
 }
 
 function average(total, count) {

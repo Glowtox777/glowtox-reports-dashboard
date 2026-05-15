@@ -11,7 +11,6 @@ import { REPORT_TARGETS } from "./reportTypes.js";
 
 const today = new Date();
 const defaultStart = "2024-01-01";
-const defaultEnd = toDateKey(addDays(today, 30));
 
 export function getDefaultFilters() {
   const completedMonth = toMonthKey(today);
@@ -30,6 +29,26 @@ export function getDefaultFilters() {
       month: completedMonth,
       startDate: `${completedMonth.slice(0, 4)}-${completedMonth.slice(4, 6)}-01`,
       endDate: toDateKey(today),
+    },
+  };
+}
+
+export async function getReportsSummary(filters = getDefaultFilters()) {
+  const [bookings, planned, completed] = await Promise.all([
+    getBookingsReportFromConfiguredSource(filters.bookings),
+    getPlannedReportFromConfiguredSource(filters.planned),
+    getCompletedReportFromConfiguredSource(filters.completed),
+  ]);
+
+  return {
+    generatedAt: new Date().toLocaleString("de-DE"),
+    useRealReportData: isRealReportDataEnabled(),
+    filters,
+    completedMonths: getAvailableCompletedMonths(),
+    reports: {
+      bookings,
+      planned,
+      completed,
     },
   };
 }
