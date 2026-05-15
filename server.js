@@ -18,20 +18,9 @@ const port = Number(process.env.PORT ?? 4173);
 
 app.disable("x-powered-by");
 
-app.get("/", (_request, response) => {
-  response.sendFile(path.join(__dirname, "index.html"));
-});
+const apiRouter = express.Router();
 
-app.get("/styles.css", (_request, response) => {
-  response.sendFile(path.join(__dirname, "styles.css"));
-});
-
-app.use("/src", express.static(path.join(__dirname, "src"), {
-  dotfiles: "deny",
-  index: false,
-}));
-
-app.get("/api/reports/summary", async (request, response, next) => {
+apiRouter.get("/reports/summary", async (request, response, next) => {
   try {
     const filters = filtersFromQuery(request.query);
     const summary = await getReportsSummary(filters);
@@ -41,7 +30,7 @@ app.get("/api/reports/summary", async (request, response, next) => {
   }
 });
 
-app.get("/api/diagnostics", async (_request, response, next) => {
+apiRouter.get("/diagnostics", async (_request, response, next) => {
   try {
     const diagnostics = {
       useRealReportData: isRealReportDataEnabled(),
@@ -64,7 +53,26 @@ app.get("/api/diagnostics", async (_request, response, next) => {
   }
 });
 
-app.use((request, response, next) => {
+apiRouter.use((_request, response) => {
+  response.status(404).json({ error: "Not found" });
+});
+
+app.use("/api", apiRouter);
+
+app.get("/", (_request, response) => {
+  response.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/styles.css", (_request, response) => {
+  response.sendFile(path.join(__dirname, "styles.css"));
+});
+
+app.use("/src", express.static(path.join(__dirname, "src"), {
+  dotfiles: "deny",
+  index: false,
+}));
+
+app.get("*", (request, response) => {
   if (request.path.startsWith("/api/")) {
     response.status(404).json({ error: "Not found" });
     return;
