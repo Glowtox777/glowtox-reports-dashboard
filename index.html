@@ -26,33 +26,11 @@
         <div class="reportHeader">
           <div>
             <h2 id="bookings-title">Buchungen</h2>
-            <p>Enthält keine Buchungen die nur aus 'Nachsorge' bestehen.</p>
+            <p>Operative Buchungszahlen nach Erstellungsdatum. Enthält keine Buchungen die nur aus 'Nachsorge' bestehen.</p>
             <p class="metaLine" id="bookingsLatest"></p>
           </div>
-          <div class="filters">
-            <label>
-              Von
-              <input type="date" id="bookingsStart" />
-            </label>
-            <label>
-              Bis
-              <input type="date" id="bookingsEnd" />
-            </label>
-            <label>
-              Wochentag
-              <select id="weekdayFilter">
-                <option value="all">Alle</option>
-                <option value="Monday">Montag</option>
-                <option value="Tuesday">Dienstag</option>
-                <option value="Wednesday">Mittwoch</option>
-                <option value="Thursday">Donnerstag</option>
-                <option value="Friday">Freitag</option>
-                <option value="Saturday">Samstag</option>
-                <option value="Sunday">Sonntag</option>
-              </select>
-            </label>
-          </div>
         </div>
+        <div class="kpiMatrix" id="bookingKpis"></div>
         <div class="bookingSections">
           <section class="reportPanel">
             <div class="panelTitle">

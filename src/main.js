@@ -7,6 +7,7 @@ let filters = null;
 const elements = {
   globalHeartbeat: document.querySelector("#globalHeartbeat"),
   apiError: createApiErrorBanner(),
+  bookingKpis: document.querySelector("#bookingKpis"),
   bookingChart: document.querySelector("#bookingChart"),
   bookingTable: document.querySelector("#bookingTable"),
   cancelledChart: document.querySelector("#cancelledChart"),
@@ -30,21 +31,6 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-bindFilter("#bookingsStart", (value) => {
-  if (!filters) return;
-  filters.bookings.startDate = value;
-  loadSummary();
-});
-bindFilter("#bookingsEnd", (value) => {
-  if (!filters) return;
-  filters.bookings.endDate = value;
-  loadSummary();
-});
-bindFilter("#weekdayFilter", (value) => {
-  if (!filters) return;
-  filters.bookings.weekday = value;
-  loadSummary();
-});
 bindFilter("#plannedStart", (value) => {
   if (!filters) return;
   filters.planned.startDate = value;
@@ -103,9 +89,9 @@ function renderAll(summary) {
 }
 
 function renderBookings(report) {
-  const weekdayLabel = filters.bookings.weekday === "all" ? "alle Wochentage" : translateWeekday(filters.bookings.weekday);
   document.querySelector("#bookingsLatest").textContent =
-    `Letztes Datendatum: ${report.latestDataDate} · Filter: ${weekdayLabel}`;
+    `Letzte Aktualisierung: ${report.heartbeat} · Tagesbasis: Europe/Berlin · Letztes Datendatum: ${report.latestDataDate}`;
+  renderBookingKpis(report);
 
   renderBookingSection({
     chartTarget: elements.bookingChart,
@@ -132,6 +118,59 @@ function renderBookings(report) {
     heartbeat: report.heartbeat,
     chartLabel: "Alle Buchungen",
   });
+}
+
+function renderBookingKpis(report) {
+  const rows = [
+    { key: "today", label: "Heute" },
+    { key: "week", label: "Diese Woche" },
+    { key: "month", label: "Dieser Monat" },
+  ];
+  const columns = [
+    {
+      key: "accepted",
+      label: "Akzeptierte Buchungen",
+      subtitle: 'created_at im Zeitraum · state = "accepted" · isOnlyAftercare = false',
+    },
+    {
+      key: "cancelled",
+      label: "Abgesagte Buchungen",
+      subtitle: 'created_at im Zeitraum · state in cancelled/canceled/rejected/declined · isOnlyAftercare = false',
+    },
+    {
+      key: "all",
+      label: "Alle Buchungen",
+      subtitle: "created_at im Zeitraum · isOnlyAftercare = false",
+    },
+  ];
+
+  elements.bookingKpis.innerHTML = `
+    <div></div>
+    ${columns.map((column) => `<div class="kpiHeader">${column.label}</div>`).join("")}
+    ${rows
+      .map((row) => {
+        const period = report.periods[row.key];
+        const values = report.kpis[row.key];
+
+        return `
+          <div class="kpiPeriod">
+            <span>${row.label}</span>
+            <span class="kpiRange">${period.rangeLabel}</span>
+          </div>
+          ${columns
+            .map(
+              (column) => `
+                <article class="kpiCard">
+                  <div class="kpiNumber">${formatNumber(values[column.key])}</div>
+                  <div class="kpiSubtitle">${column.subtitle}</div>
+                </article>
+              `,
+            )
+            .join("")}
+        `;
+      })
+      .join("")}
+  `;
 }
 
 function renderPlanned(report) {
@@ -237,9 +276,6 @@ async function readJsonError(response) {
 }
 
 function syncFilterInputs(summary) {
-  document.querySelector("#bookingsStart").value = filters.bookings.startDate;
-  document.querySelector("#bookingsEnd").value = filters.bookings.endDate;
-  document.querySelector("#weekdayFilter").value = filters.bookings.weekday;
   document.querySelector("#plannedStart").value = filters.planned.startDate;
   document.querySelector("#plannedEnd").value = filters.planned.endDate;
   document.querySelector("#completedStart").value = filters.completed.startDate;
@@ -256,9 +292,6 @@ function buildQueryString() {
   }
 
   const params = new URLSearchParams({
-    bookingsStart: filters.bookings.startDate,
-    bookingsEnd: filters.bookings.endDate,
-    weekday: filters.bookings.weekday,
     plannedStart: filters.planned.startDate,
     plannedEnd: filters.planned.endDate,
     completedMonth: filters.completed.month,
@@ -285,16 +318,6 @@ function averagePercent(total, base) {
   return `${Math.round((total / base) * 100)}%`;
 }
 
-function translateWeekday(weekday) {
-  const labels = {
-    Monday: "Montag",
-    Tuesday: "Dienstag",
-    Wednesday: "Mittwoch",
-    Thursday: "Donnerstag",
-    Friday: "Freitag",
-    Saturday: "Samstag",
-    Sunday: "Sonntag",
-  };
-
-  return labels[weekday] ?? weekday;
+function formatNumber(value) {
+  return new Intl.NumberFormat("de-DE").format(value ?? 0);
 }

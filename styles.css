@@ -99,6 +99,61 @@ h3 {
   font-weight: 700;
 }
 
+.kpiMatrix {
+  display: grid;
+  grid-template-columns: 132px repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kpiHeader,
+.kpiPeriod,
+.kpiCard {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.kpiHeader {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.kpiPeriod {
+  display: grid;
+  align-content: center;
+  padding: 12px;
+  font-weight: 800;
+}
+
+.kpiRange {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.kpiCard {
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+
+.kpiNumber {
+  font-size: 2rem;
+  font-weight: 850;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiSubtitle {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -462,7 +517,8 @@ tfoot td {
 
   .metricGrid,
   .layoutTwo,
-  .reportGrid {
+  .reportGrid,
+  .kpiMatrix {
     grid-template-columns: 1fr;
   }
 }

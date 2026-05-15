@@ -16,3 +16,5 @@ export const REPORT_TARGETS = {
   completedDelta: 51,
   completedPercentBase: 64,
 };
+
+export const CANCELLATION_STATES = ["cancelled", "canceled", "rejected", "declined"];

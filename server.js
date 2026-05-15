@@ -14,6 +14,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT ?? 4173);
+const SUMMARY_CACHE_TTL_SECONDS = 300;
+const ERROR_CACHE_TTL_SECONDS = 30;
+let summaryCache = null;
 
 app.disable("x-powered-by");
 
@@ -22,10 +25,49 @@ const apiRouter = express.Router();
 
 apiRouter.get("/reports/summary", async (request, response, next) => {
   try {
+    const refresh = request.query.refresh === "true";
+    const now = Date.now();
+
+    if (isRealReportDataEnabled() && !refresh && summaryCache && summaryCache.expiresAtMs > now) {
+      response.status(summaryCache.statusCode).json(summaryCache.body);
+      return;
+    }
+
     const filters = filtersFromQuery(request.query);
     const summary = await getReportsSummary(filters);
-    response.json(summary);
+    const body = withCacheMetadata(summary, isRealReportDataEnabled(), SUMMARY_CACHE_TTL_SECONDS);
+
+    if (isRealReportDataEnabled()) {
+      summaryCache = {
+        statusCode: 200,
+        body,
+        expiresAtMs: now + SUMMARY_CACHE_TTL_SECONDS * 1000,
+      };
+    }
+
+    response.json(body);
   } catch (error) {
+    if (isRealReportDataEnabled()) {
+      const body = {
+        error: "Report data request failed",
+        detail: safeErrorMessage(error),
+        cache: {
+          enabled: true,
+          ttlSeconds: ERROR_CACHE_TTL_SECONDS,
+          generatedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + ERROR_CACHE_TTL_SECONDS * 1000).toISOString(),
+        },
+      };
+
+      summaryCache = {
+        statusCode: 500,
+        body,
+        expiresAtMs: Date.now() + ERROR_CACHE_TTL_SECONDS * 1000,
+      };
+      response.status(500).json(body);
+      return;
+    }
+
     next(error);
   }
 });
@@ -154,5 +196,28 @@ function sanitizeError(error) {
 }
 
 function safeErrorMessage(error) {
-  return error?.message ?? "Unknown error";
+  return redactSecrets(error?.message ?? "Unknown error");
+}
+
+function withCacheMetadata(summary, enabled, ttlSeconds) {
+  const generatedAt = new Date();
+
+  return {
+    ...summary,
+    cache: {
+      enabled,
+      ttlSeconds: enabled ? ttlSeconds : 0,
+      generatedAt: generatedAt.toISOString(),
+      expiresAt: enabled ? new Date(generatedAt.getTime() + ttlSeconds * 1000).toISOString() : null,
+    },
+  };
+}
+
+function redactSecrets(value) {
+  const secrets = [
+    process.env.COSMOS_KEY,
+    process.env.COSMOS_ENDPOINT,
+  ].filter(Boolean);
+
+  return secrets.reduce((message, secret) => message.replaceAll(secret, "[redacted]"), value);
 }

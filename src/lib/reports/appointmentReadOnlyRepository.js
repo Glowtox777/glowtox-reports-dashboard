@@ -15,6 +15,8 @@ const REQUIRED_ENV = [
   "COSMOS_APPOINTMENTS_CONTAINER_ID",
 ];
 
+const CANCELLATION_STATES = ["cancelled", "canceled", "rejected", "declined"];
+
 export function isRealReportDataEnabled() {
   return getEnvValue("USE_REAL_REPORT_DATA") === "true";
 }
@@ -39,8 +41,9 @@ export async function getCancelledBookingsByDay({ from, to, weekday = "all" }) {
     to,
     weekday,
     weekdayField: "created_at_weekday",
-    state: "cancelled",
+    states: CANCELLATION_STATES,
     extraWhere: [],
+    // TODO: Confirm whether real cancellation state names differ from cancelled/canceled/rejected/declined.
     // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachsorge" bookings.
   });
 }
@@ -85,6 +88,82 @@ export async function getCompletedAppointmentsByDay({ from, to, month }) {
     extraParameters: [{ name: "@month", value: month }],
     // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachkontrolle" appointments.
   });
+}
+
+export async function getBookingKpisForPeriods(periods) {
+  const [stateDistribution, periodCounts] = await Promise.all([
+    getBookingStateDistribution({
+      from: periods.month.from,
+      to: periods.month.to,
+    }),
+    Promise.all(
+      Object.entries(periods).map(async ([key, period]) => [
+        key,
+        await getBookingCountsForPeriod(period),
+      ]),
+    ),
+  ]);
+
+  return {
+    stateDistribution,
+    periods: Object.fromEntries(periodCounts),
+  };
+}
+
+export async function getBookingStateDistribution({ from, to }) {
+  const container = await getAppointmentsContainer();
+  const querySpec = {
+    query: `
+      SELECT c.state AS state, COUNT(1) AS count
+      FROM c
+      WHERE c.created_at >= @from
+        AND c.created_at <= @to
+        AND c.isOnlyAftercare = false
+      GROUP BY c.state
+    `,
+    parameters: [
+      { name: "@from", value: from },
+      { name: "@to", value: to },
+    ],
+  };
+
+  const { resources } = await container.items.query(querySpec, { enableCrossPartitionQuery: true }).fetchAll();
+  return resources
+    .map((row) => ({
+      state: row.state ?? null,
+      count: row.count ?? 0,
+    }))
+    .sort((left, right) => right.count - left.count);
+}
+
+async function getBookingCountsForPeriod({ from, to }) {
+  const container = await getAppointmentsContainer();
+  const querySpec = {
+    query: `
+      SELECT
+        SUM(IIF(c.state = "accepted", 1, 0)) AS accepted,
+        SUM(IIF(ARRAY_CONTAINS(@cancellationStates, c.state), 1, 0)) AS cancelled,
+        COUNT(1) AS allBookings
+      FROM c
+      WHERE c.created_at >= @from
+        AND c.created_at <= @to
+        AND c.isOnlyAftercare = false
+    `,
+    parameters: [
+      { name: "@from", value: from },
+      { name: "@to", value: to },
+      { name: "@cancellationStates", value: CANCELLATION_STATES },
+    ],
+  };
+
+  const { resources } = await container.items.query(querySpec, { enableCrossPartitionQuery: true }).fetchAll();
+  const row = resources[0] ?? {};
+
+  return {
+    accepted: row.accepted ?? 0,
+    cancelled: row.cancelled ?? 0,
+    all: row.allBookings ?? 0,
+  };
 }
 
 export async function getAppointmentDiagnostics() {
@@ -133,6 +212,7 @@ async function queryAppointmentsByDay({
   weekday,
   weekdayField,
   state,
+  states,
   extraWhere = [],
   extraParameters = [],
 }) {
@@ -158,6 +238,11 @@ async function queryAppointmentsByDay({
   if (state) {
     where.push("c.state = @state");
     parameters.push({ name: "@state", value: state });
+  }
+
+  if (states) {
+    where.push("ARRAY_CONTAINS(@states, c.state)");
+    parameters.push({ name: "@states", value: states });
   }
 
   if (weekday && weekday !== "all" && weekdayField) {
@@ -227,10 +312,18 @@ function addDays(dateKey, days) {
 }
 
 function startOfDay(dateKey) {
+  if (dateKey.includes("T")) {
+    return dateKey;
+  }
+
   return `${dateKey}T00:00:00.000Z`;
 }
 
 function endOfDay(dateKey) {
+  if (dateKey.includes("T")) {
+    return dateKey;
+  }
+
   return `${dateKey}T23:59:59.999Z`;
 }
 
