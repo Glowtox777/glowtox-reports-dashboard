@@ -1,0 +1,8 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "127.0.0.1:4173:4173"
+    environment:
+      USE_REAL_REPORT_DATA: "false"
+    restart: unless-stopped
