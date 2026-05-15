@@ -107,8 +107,8 @@ app.use((error, _request, response, _next) => {
   response.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(port, () => {
-  console.log(`Reports dashboard listening on port ${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Reports dashboard listening on 0.0.0.0:${port}`);
   console.log(`USE_REAL_REPORT_DATA=${isRealReportDataEnabled() ? "true" : "false"}`);
 });
 

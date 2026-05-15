@@ -1,8 +1,9 @@
 services:
   dashboard:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: glowtox-reports-dashboard
-    command: npm start
     expose:
       - "4173"
     environment:
