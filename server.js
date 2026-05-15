@@ -29,7 +29,10 @@ apiRouter.get("/reports/summary", async (request, response, next) => {
     const now = Date.now();
 
     if (isRealReportDataEnabled() && !refresh && summaryCache && summaryCache.expiresAtMs > now) {
-      response.status(summaryCache.statusCode).json(summaryCache.body);
+      response.status(summaryCache.statusCode).json({
+        ...summaryCache.body,
+        cacheHit: true,
+      });
       return;
     }
 
@@ -85,6 +88,12 @@ apiRouter.get("/diagnostics", async (_request, response) => {
     cosmos: {
       status: "mock-disabled",
       count: null,
+      totalDocumentsQueried: null,
+      createdAtDefined: null,
+      startsAtDefined: null,
+      isOnlyAftercare: null,
+      no_show: null,
+      stateDistribution: [],
       sample: [],
       error: null,
     },
@@ -95,8 +104,14 @@ apiRouter.get("/diagnostics", async (_request, response) => {
       const appointmentDiagnostics = await getAppointmentDiagnostics();
       diagnostics.cosmos = {
         status: "ok",
-        count: appointmentDiagnostics.count,
-        sample: appointmentDiagnostics.sample,
+        count: appointmentDiagnostics.totalDocumentsQueried,
+        totalDocumentsQueried: appointmentDiagnostics.totalDocumentsQueried,
+        createdAtDefined: appointmentDiagnostics.createdAtDefined,
+        startsAtDefined: appointmentDiagnostics.startsAtDefined,
+        isOnlyAftercare: appointmentDiagnostics.isOnlyAftercare,
+        no_show: appointmentDiagnostics.no_show,
+        stateDistribution: appointmentDiagnostics.stateDistribution,
+        sample: appointmentDiagnostics.latestSamples,
         error: null,
       };
     } catch (error) {
@@ -204,6 +219,8 @@ function withCacheMetadata(summary, enabled, ttlSeconds) {
 
   return {
     ...summary,
+    cacheHit: false,
+    ttlSeconds: enabled ? ttlSeconds : 0,
     cache: {
       enabled,
       ttlSeconds: enabled ? ttlSeconds : 0,

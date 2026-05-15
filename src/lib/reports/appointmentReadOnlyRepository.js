@@ -1,7 +1,7 @@
 // Read-only Azure Cosmos DB repository for appointment reports.
 //
 // Safety constraints:
-// - This file is the only place future database access should live.
+// - This file is the only place database access should live.
 // - Only SELECT/read operations are allowed here.
 // - Do not add insert/update/delete/upsert/patch/replace operations.
 // - Do not add schema, migration, container, or database management logic.
@@ -15,165 +15,26 @@ const REQUIRED_ENV = [
   "COSMOS_APPOINTMENTS_CONTAINER_ID",
 ];
 
-const CANCELLATION_STATES = ["cancelled", "canceled", "rejected", "declined"];
+const SAFE_APPOINTMENT_FIELDS = [
+  "id",
+  "created_at",
+  "starts_at",
+  "state",
+  "isOnlyAftercare",
+  "no_show",
+  "customer_id",
+];
 
 export function isRealReportDataEnabled() {
   return getEnvValue("USE_REAL_REPORT_DATA") === "true";
 }
 
-export async function getCreatedBookingsByDay({ from, to, weekday = "all" }) {
-  return queryAppointmentsByDay({
-    dateField: "created_at",
-    from,
-    to,
-    weekday,
-    weekdayField: "created_at_weekday",
-    state: "accepted",
-    extraWhere: [],
-    // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachsorge" bookings.
-  });
-}
-
-export async function getCancelledBookingsByDay({ from, to, weekday = "all" }) {
-  return queryAppointmentsByDay({
-    dateField: "created_at",
-    from,
-    to,
-    weekday,
-    weekdayField: "created_at_weekday",
-    states: CANCELLATION_STATES,
-    extraWhere: [],
-    // TODO: Confirm whether real cancellation state names differ from cancelled/canceled/rejected/declined.
-    // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachsorge" bookings.
-  });
-}
-
-export async function getAllBookingsByDay({ from, to, weekday = "all" }) {
-  return queryAppointmentsByDay({
-    dateField: "created_at",
-    from,
-    to,
-    weekday,
-    weekdayField: "created_at_weekday",
-    extraWhere: [],
-    // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachsorge" bookings.
-  });
-}
-
-export async function getPlannedAppointmentsNext30Days({ fromDate }) {
-  const toDate = addDays(fromDate, 30);
-
-  return queryAppointmentsByDay({
-    dateField: "starts_at",
-    from: fromDate,
-    to: toDate,
-    state: "accepted",
-    extraWhere: [],
-    // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachsorge" appointments.
-  });
-}
-
-export async function getCompletedAppointmentsByDay({ from, to, month }) {
-  const extraWhere = [
-    "c.no_show = false",
-    "c.starts_at_monthonly = @month",
-  ];
-
-  return queryAppointmentsByDay({
-    dateField: "starts_at",
-    from,
-    to,
-    state: "accepted",
-    extraWhere,
-    extraParameters: [{ name: "@month", value: month }],
-    // TODO: Confirm the exact treatment/service/category field used to exclude pure "Nachkontrolle" appointments.
-  });
-}
-
-export async function getBookingKpisForPeriods(periods) {
-  const [stateDistribution, periodCounts] = await Promise.all([
-    getBookingStateDistribution({
-      from: periods.month.from,
-      to: periods.month.to,
-    }),
-    Promise.all(
-      Object.entries(periods).map(async ([key, period]) => [
-        key,
-        await getBookingCountsForPeriod(period),
-      ]),
-    ),
-  ]);
-
-  return {
-    stateDistribution,
-    periods: Object.fromEntries(periodCounts),
-  };
-}
-
-export async function getBookingStateDistribution({ from, to }) {
+export async function fetchAppointmentDocumentsForReports({ from = "2023-08-20", to } = {}) {
   const container = await getAppointmentsContainer();
-  const querySpec = {
-    query: `
-      SELECT c.state AS state, COUNT(1) AS count
-      FROM c
-      WHERE c.created_at >= @from
-        AND c.created_at <= @to
-        AND c.isOnlyAftercare = false
-      GROUP BY c.state
-    `,
-    parameters: [
-      { name: "@from", value: from },
-      { name: "@to", value: to },
-    ],
-  };
-
-  const { resources } = await container.items.query(querySpec, { enableCrossPartitionQuery: true }).fetchAll();
-  return resources
-    .map((row) => ({
-      state: row.state ?? null,
-      count: row.count ?? 0,
-    }))
-    .sort((left, right) => right.count - left.count);
-}
-
-async function getBookingCountsForPeriod({ from, to }) {
-  const container = await getAppointmentsContainer();
+  const toDate = to ?? toDateKey(addDays(new Date(), 30));
   const querySpec = {
     query: `
       SELECT
-        SUM(IIF(c.state = "accepted", 1, 0)) AS accepted,
-        SUM(IIF(ARRAY_CONTAINS(@cancellationStates, c.state), 1, 0)) AS cancelled,
-        COUNT(1) AS allBookings
-      FROM c
-      WHERE c.created_at >= @from
-        AND c.created_at <= @to
-        AND c.isOnlyAftercare = false
-    `,
-    parameters: [
-      { name: "@from", value: from },
-      { name: "@to", value: to },
-      { name: "@cancellationStates", value: CANCELLATION_STATES },
-    ],
-  };
-
-  const { resources } = await container.items.query(querySpec, { enableCrossPartitionQuery: true }).fetchAll();
-  const row = resources[0] ?? {};
-
-  return {
-    accepted: row.accepted ?? 0,
-    cancelled: row.cancelled ?? 0,
-    all: row.allBookings ?? 0,
-  };
-}
-
-export async function getAppointmentDiagnostics() {
-  const container = await getAppointmentsContainer();
-  const countQuery = {
-    query: "SELECT VALUE COUNT(1) FROM c",
-  };
-  const latestQuery = {
-    query: `
-      SELECT TOP 3
         c.id,
         c.created_at,
         c.starts_at,
@@ -182,91 +43,58 @@ export async function getAppointmentDiagnostics() {
         c.no_show,
         c.customer_id
       FROM c
-      ORDER BY c.created_at DESC
+      WHERE
+        (
+          IS_DEFINED(c.created_at)
+          AND c.created_at >= @from
+          AND c.created_at <= @to
+        )
+        OR
+        (
+          IS_DEFINED(c.starts_at)
+          AND c.starts_at >= @from
+          AND c.starts_at <= @to
+        )
     `,
-  };
-
-  const [countResult, latestResult] = await Promise.all([
-    container.items.query(countQuery, { enableCrossPartitionQuery: true }).fetchAll(),
-    container.items.query(latestQuery, { enableCrossPartitionQuery: true }).fetchAll(),
-  ]);
-
-  return {
-    count: countResult.resources[0] ?? 0,
-    sample: latestResult.resources.map((appointment) => ({
-      id: appointment.id ?? null,
-      created_at: appointment.created_at ?? null,
-      starts_at: appointment.starts_at ?? null,
-      state: appointment.state ?? null,
-      isOnlyAftercare: appointment.isOnlyAftercare ?? null,
-      no_show: appointment.no_show ?? null,
-      customer_id: appointment.customer_id ?? null,
-    })),
-  };
-}
-
-async function queryAppointmentsByDay({
-  dateField,
-  from,
-  to,
-  weekday,
-  weekdayField,
-  state,
-  states,
-  extraWhere = [],
-  extraParameters = [],
-}) {
-  assertSafeFieldName(dateField);
-  if (weekdayField) {
-    assertSafeFieldName(weekdayField);
-  }
-
-  const container = await getAppointmentsContainer();
-  const dateExpression = `SUBSTRING(c.${dateField}, 0, 10)`;
-  const where = [
-    `c.${dateField} >= @from`,
-    `c.${dateField} <= @to`,
-    "c.isOnlyAftercare = false",
-    ...extraWhere,
-  ];
-  const parameters = [
-    { name: "@from", value: startOfDay(from) },
-    { name: "@to", value: endOfDay(to) },
-    ...extraParameters,
-  ];
-
-  if (state) {
-    where.push("c.state = @state");
-    parameters.push({ name: "@state", value: state });
-  }
-
-  if (states) {
-    where.push("ARRAY_CONTAINS(@states, c.state)");
-    parameters.push({ name: "@states", value: states });
-  }
-
-  if (weekday && weekday !== "all" && weekdayField) {
-    where.push(`c.${weekdayField} = @weekday`);
-    parameters.push({ name: "@weekday", value: weekday });
-  }
-
-  const querySpec = {
-    query: `
-      SELECT ${dateExpression} AS date, COUNT(1) AS count
-      FROM c
-      WHERE ${where.join(" AND ")}
-      GROUP BY ${dateExpression}
-    `,
-    parameters,
+    parameters: [
+      { name: "@from", value: from },
+      { name: "@to", value: `${toDate}T23:59:59.999+02:00` },
+    ],
   };
 
   const { resources } = await container.items.query(querySpec, { enableCrossPartitionQuery: true }).fetchAll();
-  return resources
-    .map((row) => ({
-      date: row.date,
-      count: row.count,
-    }))
-    .sort((left, right) => left.date.localeCompare(right.date));
+  return resources.map(toSafeAppointment);
+}
+
+export async function getAppointmentDiagnostics() {
+  const appointments = await fetchAppointmentDocumentsForReports();
+  return buildDiagnosticsFromAppointments(appointments);
+}
+
+export function buildDiagnosticsFromAppointments(appointments) {
+  const stateDistribution = countBy(appointments, (appointment) => appointment.state ?? "missing");
+
+  return {
+    totalDocumentsQueried: appointments.length,
+    createdAtDefined: appointments.filter((appointment) => appointment.created_at).length,
+    startsAtDefined: appointments.filter((appointment) => appointment.starts_at).length,
+    isOnlyAftercare: {
+      true: appointments.filter((appointment) => appointment.isOnlyAftercare === true).length,
+      false: appointments.filter((appointment) => appointment.isOnlyAftercare === false).length,
+      missing: appointments.filter((appointment) => appointment.isOnlyAftercare === undefined || appointment.isOnlyAftercare === null).length,
+    },
+    no_show: {
+      true: appointments.filter((appointment) => appointment.no_show === true).length,
+      false: appointments.filter((appointment) => appointment.no_show === false).length,
+      missing: appointments.filter((appointment) => appointment.no_show === undefined || appointment.no_show === null).length,
+    },
+    stateDistribution,
+    latestSamples: [...appointments]
+      .filter((appointment) => appointment.created_at || appointment.starts_at)
+      .sort((left, right) => latestTimestamp(right) - latestTimestamp(left))
+      .slice(0, 5)
+      .map(toSafeAppointment),
+  };
 }
 
 async function getAppointmentsContainer() {
@@ -305,35 +133,37 @@ function getEnvValue(name) {
   return process.env[name];
 }
 
-function addDays(dateKey, days) {
-  const date = new Date(`${dateKey}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return toDateKey(date);
+function toSafeAppointment(appointment) {
+  return Object.fromEntries(
+    SAFE_APPOINTMENT_FIELDS.map((field) => [field, appointment[field]]),
+  );
 }
 
-function startOfDay(dateKey) {
-  if (dateKey.includes("T")) {
-    return dateKey;
-  }
+function countBy(items, getKey) {
+  const counts = new Map();
 
-  return `${dateKey}T00:00:00.000Z`;
+  items.forEach((item) => {
+    const key = getKey(item);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+
+  return [...counts.entries()]
+    .map(([state, count]) => ({ state, count }))
+    .sort((left, right) => right.count - left.count);
 }
 
-function endOfDay(dateKey) {
-  if (dateKey.includes("T")) {
-    return dateKey;
-  }
+function latestTimestamp(appointment) {
+  const value = appointment.created_at ?? appointment.starts_at;
+  return value ? new Date(value).getTime() : 0;
+}
 
-  return `${dateKey}T23:59:59.999Z`;
+function addDays(value, days) {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function toDateKey(value) {
   const date = new Date(value);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function assertSafeFieldName(fieldName) {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldName)) {
-    throw new Error(`Unsafe field name in read-only report query: ${fieldName}`);
-  }
 }

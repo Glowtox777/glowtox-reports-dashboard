@@ -82,7 +82,9 @@ async function loadSummary() {
 }
 
 function renderAll(summary) {
-  elements.globalHeartbeat.textContent = `Letzte Aktualisierung: ${summary.generatedAt}`;
+  const sourceLabel = summary.source === "cosmos" ? "Cosmos" : "Mock";
+  const cacheLabel = summary.cacheHit ? "Cache" : "Frisch";
+  elements.globalHeartbeat.textContent = `Datenquelle: ${sourceLabel} · ${cacheLabel} · Letzte Aktualisierung: ${summary.generatedAt}`;
   renderBookings(summary.reports.bookings);
   renderPlanned(summary.reports.planned);
   renderCompleted(summary.reports.completed);

@@ -17,4 +17,11 @@ export const REPORT_TARGETS = {
   completedPercentBase: 64,
 };
 
-export const CANCELLATION_STATES = ["cancelled", "canceled", "rejected", "declined"];
+export const CANCELLATION_STATES = [
+  "cancelled",
+  "canceled",
+  "rejected",
+  "declined",
+  "canceled_by_customer",
+  "cancelled_by_customer",
+];
