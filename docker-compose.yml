@@ -2,6 +2,7 @@ services:
   dashboard:
     build: .
     container_name: glowtox-reports-dashboard
+    command: npm start
     expose:
       - "4173"
     environment:

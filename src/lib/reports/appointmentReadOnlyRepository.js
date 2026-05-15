@@ -113,8 +113,8 @@ export async function getAppointmentDiagnostics() {
   ]);
 
   return {
-    appointmentCount: countResult.resources[0] ?? 0,
-    latestAppointments: latestResult.resources.map((appointment) => ({
+    count: countResult.resources[0] ?? 0,
+    sample: latestResult.resources.map((appointment) => ({
       id: appointment.id ?? null,
       created_at: appointment.created_at ?? null,
       starts_at: appointment.starts_at ?? null,

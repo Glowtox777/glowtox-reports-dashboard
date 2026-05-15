@@ -6,6 +6,7 @@ let filters = null;
 
 const elements = {
   globalHeartbeat: document.querySelector("#globalHeartbeat"),
+  apiError: createApiErrorBanner(),
   bookingChart: document.querySelector("#bookingChart"),
   bookingTable: document.querySelector("#bookingTable"),
   cancelledChart: document.querySelector("#cancelledChart"),
@@ -76,9 +77,11 @@ loadSummary();
 
 async function loadSummary() {
   try {
+    showApiError("");
     const response = await fetch(`/api/reports/summary${buildQueryString()}`);
     if (!response.ok) {
-      throw new Error(`Report API failed with ${response.status}`);
+      const errorBody = await readJsonError(response);
+      throw new Error(errorBody?.error ?? `Report API failed with ${response.status}`);
     }
     const summary = await response.json();
 
@@ -87,6 +90,7 @@ async function loadSummary() {
     renderAll(summary);
   } catch (error) {
     elements.globalHeartbeat.textContent = "Berichtsdaten konnten nicht geladen werden.";
+    showApiError(`Berichtsdaten konnten nicht geladen werden: ${error.message}`);
     console.error(error);
   }
 }
@@ -208,6 +212,28 @@ function renderBookingSection({ chartTarget, tableTarget, heartbeatTarget, rows,
 
 function bindFilter(selector, callback) {
   document.querySelector(selector).addEventListener("change", (event) => callback(event.target.value));
+}
+
+function createApiErrorBanner() {
+  const banner = document.createElement("div");
+  banner.className = "apiError";
+  banner.setAttribute("role", "alert");
+  banner.hidden = true;
+  document.querySelector(".topbar").insertAdjacentElement("afterend", banner);
+  return banner;
+}
+
+function showApiError(message) {
+  elements.apiError.textContent = message;
+  elements.apiError.hidden = message === "";
+}
+
+async function readJsonError(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return null;
+  }
 }
 
 function syncFilterInputs(summary) {

@@ -89,6 +89,16 @@ h3 {
   white-space: nowrap;
 }
 
+.apiError {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(184, 59, 74, 0.35);
+  border-radius: 6px;
+  color: var(--danger);
+  background: rgba(184, 59, 74, 0.08);
+  font-weight: 700;
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;

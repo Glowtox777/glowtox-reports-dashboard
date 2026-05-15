@@ -2,7 +2,6 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  getAvailableCompletedMonths,
   getDefaultFilters,
   getReportsSummary,
 } from "./src/lib/reports/reportService.js";
@@ -18,6 +17,7 @@ const port = Number(process.env.PORT ?? 4173);
 
 app.disable("x-powered-by");
 
+// API routes are intentionally registered before static assets and the HTML fallback.
 const apiRouter = express.Router();
 
 apiRouter.get("/reports/summary", async (request, response, next) => {
@@ -30,27 +30,44 @@ apiRouter.get("/reports/summary", async (request, response, next) => {
   }
 });
 
-apiRouter.get("/diagnostics", async (_request, response, next) => {
-  try {
-    const diagnostics = {
-      useRealReportData: isRealReportDataEnabled(),
-      cosmosEndpointSet: Boolean(process.env.COSMOS_ENDPOINT),
-      cosmosDatabaseId: process.env.COSMOS_DATABASE_ID || null,
-      cosmosAppointmentsContainerId: process.env.COSMOS_APPOINTMENTS_CONTAINER_ID || null,
-      appointmentCount: null,
-      latestAppointments: [],
-    };
+apiRouter.get("/diagnostics", async (_request, response) => {
+  const diagnostics = {
+    runtime: "node-express",
+    useRealReportData: isRealReportDataEnabled(),
+    env: {
+      COSMOS_ENDPOINT_SET: Boolean(process.env.COSMOS_ENDPOINT),
+      COSMOS_KEY_SET: Boolean(process.env.COSMOS_KEY),
+      COSMOS_DATABASE_ID: process.env.COSMOS_DATABASE_ID || null,
+      COSMOS_APPOINTMENTS_CONTAINER_ID: process.env.COSMOS_APPOINTMENTS_CONTAINER_ID || null,
+    },
+    cosmos: {
+      status: "mock-disabled",
+      count: null,
+      sample: [],
+      error: null,
+    },
+  };
 
-    if (isRealReportDataEnabled()) {
+  if (isRealReportDataEnabled()) {
+    try {
       const appointmentDiagnostics = await getAppointmentDiagnostics();
-      diagnostics.appointmentCount = appointmentDiagnostics.appointmentCount;
-      diagnostics.latestAppointments = appointmentDiagnostics.latestAppointments;
+      diagnostics.cosmos = {
+        status: "ok",
+        count: appointmentDiagnostics.count,
+        sample: appointmentDiagnostics.sample,
+        error: null,
+      };
+    } catch (error) {
+      diagnostics.cosmos = {
+        status: "error",
+        count: null,
+        sample: [],
+        error: safeErrorMessage(error),
+      };
     }
-
-    response.json(diagnostics);
-  } catch (error) {
-    next(error);
   }
+
+  response.json(diagnostics);
 });
 
 apiRouter.use((_request, response) => {
@@ -60,6 +77,10 @@ apiRouter.use((_request, response) => {
 app.use("/api", apiRouter);
 
 app.get("/", (_request, response) => {
+  response.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/index.html", (_request, response) => {
   response.sendFile(path.join(__dirname, "index.html"));
 });
 
@@ -128,6 +149,10 @@ function stringOrDefault(value, fallback) {
 function sanitizeError(error) {
   return {
     name: error?.name ?? "Error",
-    message: error?.message ?? "Unknown error",
+    message: safeErrorMessage(error),
   };
+}
+
+function safeErrorMessage(error) {
+  return error?.message ?? "Unknown error";
 }

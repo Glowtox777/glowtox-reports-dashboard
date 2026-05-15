@@ -13,6 +13,27 @@ The dashboard runs on a minimal Node/Express server. Express serves the static f
 
 `/api/diagnostics` is read-only. It reports whether real data mode is enabled, whether the Cosmos endpoint is configured, the configured database/container ids, a count query result, and only safe fields from the latest three appointments. It must not return `COSMOS_KEY`, full documents, or any secret values.
 
+Expected diagnostics shape:
+
+```json
+{
+  "runtime": "node-express",
+  "useRealReportData": false,
+  "env": {
+    "COSMOS_ENDPOINT_SET": false,
+    "COSMOS_KEY_SET": false,
+    "COSMOS_DATABASE_ID": null,
+    "COSMOS_APPOINTMENTS_CONTAINER_ID": null
+  },
+  "cosmos": {
+    "status": "mock-disabled",
+    "count": null,
+    "sample": [],
+    "error": null
+  }
+}
+```
+
 ## Portainer Deployment With Existing Cloudflare Tunnel
 
 This stack is intended for your existing Cloudflare Tunnel named `dash1`. It does not start a `cloudflared` container and does not publish any host ports.
@@ -26,6 +47,8 @@ This stack is intended for your existing Cloudflare Tunnel named `dash1`. It doe
 7. Protect `reports.glowtox.link` with Cloudflare Access before sharing it.
 
 The production compose file uses `expose: 4173` only and does not publish host ports.
+
+The production container runs `npm start`, which starts `node server.js`.
 
 For optional local testing, use `docker-compose.local.yml`. It binds only to `127.0.0.1:4173`.
 
