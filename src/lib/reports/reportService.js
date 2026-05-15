@@ -1,4 +1,12 @@
 import { mockAppointments, addDays, toDateKey, toMonthKey } from "./mockData.js";
+import {
+  getAllBookingsByDay,
+  getCancelledBookingsByDay,
+  getCompletedAppointmentsByDay,
+  getCreatedBookingsByDay,
+  getPlannedAppointmentsNext30Days,
+  isRealReportDataEnabled,
+} from "./appointmentReadOnlyRepository.js";
 import { REPORT_TARGETS } from "./reportTypes.js";
 
 const today = new Date();
@@ -51,6 +59,38 @@ export function getBookingsReport(filters) {
   };
 }
 
+export async function getBookingsReportFromConfiguredSource(filters) {
+  if (!isRealReportDataEnabled()) {
+    return getBookingsReport(filters);
+  }
+
+  const [createdRows, cancelledRows, allRows] = await Promise.all([
+    getCreatedBookingsByDay({
+      from: filters.startDate,
+      to: filters.endDate,
+      weekday: filters.weekday,
+    }),
+    getCancelledBookingsByDay({
+      from: filters.startDate,
+      to: filters.endDate,
+      weekday: filters.weekday,
+    }),
+    getAllBookingsByDay({
+      from: filters.startDate,
+      to: filters.endDate,
+      weekday: filters.weekday,
+    }),
+  ]);
+
+  return {
+    heartbeat: new Date().toLocaleString("de-DE"),
+    latestDataDate: latestDateFromRows(allRows),
+    createdRows: rowsFromCounts(createdRows, filters.startDate, filters.endDate),
+    cancelledRows: rowsFromCounts(cancelledRows, filters.startDate, filters.endDate),
+    allRows: rowsFromCounts(allRows, filters.startDate, filters.endDate),
+  };
+}
+
 export function getPlannedReport(filters) {
   const rows = groupByDay(
     mockAppointments.filter((appointment) => {
@@ -83,6 +123,27 @@ export function getPlannedReport(filters) {
       }),
       "starts_at",
     ),
+    rows,
+    total: rows.reduce((sum, row) => sum + row.count, 0),
+  };
+}
+
+export async function getPlannedReportFromConfiguredSource(filters) {
+  if (!isRealReportDataEnabled()) {
+    return getPlannedReport(filters);
+  }
+
+  const realRows = await getPlannedAppointmentsNext30Days({ fromDate: filters.startDate });
+  const rows = rowsFromCounts(realRows, filters.startDate, filters.endDate).map((row) => ({
+    ...row,
+    termine: row.count,
+    delta45: row.count - REPORT_TARGETS.plannedDelta,
+    percent53: formatPercent(row.count / REPORT_TARGETS.plannedPercentBase),
+  }));
+
+  return {
+    heartbeat: new Date().toLocaleString("de-DE"),
+    latestDataDate: latestDateFromRows(realRows),
     rows,
     total: rows.reduce((sum, row) => sum + row.count, 0),
   };
@@ -122,6 +183,31 @@ export function getCompletedReport(filters) {
       }),
       "starts_at",
     ),
+    rows,
+    total: rows.reduce((sum, row) => sum + row.count, 0),
+  };
+}
+
+export async function getCompletedReportFromConfiguredSource(filters) {
+  if (!isRealReportDataEnabled()) {
+    return getCompletedReport(filters);
+  }
+
+  const realRows = await getCompletedAppointmentsByDay({
+    from: filters.startDate,
+    to: filters.endDate,
+    month: filters.month,
+  });
+  const rows = rowsFromCounts(realRows, filters.startDate, filters.endDate).map((row) => ({
+    ...row,
+    termine: row.count,
+    delta51: row.count - REPORT_TARGETS.completedDelta,
+    percent64: formatPercent(row.count / REPORT_TARGETS.completedPercentBase),
+  }));
+
+  return {
+    heartbeat: new Date().toLocaleString("de-DE"),
+    latestDataDate: latestDateFromRows(realRows),
     rows,
     total: rows.reduce((sum, row) => sum + row.count, 0),
   };
@@ -184,6 +270,17 @@ function buildDateRange(startDate, endDate) {
   return dates;
 }
 
+function rowsFromCounts(rows, startDate, endDate) {
+  const counts = new Map(rows.map((row) => [row.date, row.count]));
+
+  return buildDateRange(startDate, endDate).map((date) => ({
+    date,
+    dateDisplay: formatDate(date),
+    label: formatShortDate(date),
+    count: counts.get(date) ?? 0,
+  }));
+}
+
 function latestDate(appointments, fieldName) {
   if (appointments.length === 0) {
     return "Keine Daten";
@@ -195,4 +292,14 @@ function latestDate(appointments, fieldName) {
     .at(-1);
 
   return formatDate(latest);
+}
+
+function latestDateFromRows(rows) {
+  const latest = rows
+    .filter((row) => row.count > 0)
+    .map((row) => row.date)
+    .sort()
+    .at(-1);
+
+  return latest ? formatDate(latest) : "Keine Daten";
 }

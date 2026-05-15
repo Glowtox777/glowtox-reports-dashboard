@@ -1,0 +1,20 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "127.0.0.1:4173:80"
+    environment:
+      USE_REAL_REPORT_DATA: "false"
+    restart: unless-stopped
+
+  # Cloudflare Tunnel placeholder:
+  # Add a cloudflared service only after creating tunnel credentials outside this repo.
+  # Do not commit real tunnel tokens or credential JSON.
+  #
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   command: tunnel --no-autoupdate run
+  #   environment:
+  #     TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     - dashboard
