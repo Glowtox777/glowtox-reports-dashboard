@@ -50,6 +50,8 @@ The production compose file uses `expose: 4173` only and does not publish host p
 
 The production container runs `npm start`, which starts `node server.js`.
 
+In Portainer, stack environment variables must be referenced under the dashboard service `environment:` block in `docker-compose.yml`. Setting variables in the Portainer UI alone is not enough unless the compose file passes them into the container, for example `COSMOS_DATABASE_ID: ${COSMOS_DATABASE_ID:-}`.
+
 For optional local testing, use `docker-compose.local.yml`. It binds only to `127.0.0.1:4173`.
 
 ## Real Read-Only Data Later

@@ -7,5 +7,10 @@ services:
     expose:
       - "4173"
     environment:
-      USE_REAL_REPORT_DATA: "false"
+      USE_REAL_REPORT_DATA: ${USE_REAL_REPORT_DATA:-false}
+      COSMOS_ENDPOINT: ${COSMOS_ENDPOINT:-}
+      COSMOS_KEY: ${COSMOS_KEY:-}
+      COSMOS_DATABASE_ID: ${COSMOS_DATABASE_ID:-}
+      COSMOS_APPOINTMENTS_CONTAINER_ID: ${COSMOS_APPOINTMENTS_CONTAINER_ID:-}
+      PORT: 4173
     restart: unless-stopped
